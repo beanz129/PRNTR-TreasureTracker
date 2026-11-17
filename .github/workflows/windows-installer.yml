@@ -1,10 +1,15 @@
-name: Build Windows installer
+name: Build installer and publish website
 on:
   workflow_dispatch:
   push:
     branches: [treasure-tracker-release]
 permissions:
-  contents: read
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: treasure-tracker-release
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: windows-latest
@@ -14,17 +19,17 @@ jobs:
         with:
           python-version: '3.13'
           architecture: 'x64'
-      - name: Verify desktop source
+      - name: Verify desktop project
         shell: pwsh
         run: |
           @('app/app.py','app/desktop_gui.py','app/dashboard.html','app/overlay.html','app/pirate-theme.png','installer/TreasureTracker.iss') | ForEach-Object {
             if (-not (Test-Path $_)) { throw "Required file missing: $_" }
           }
-      - name: Check Python source
+      - name: Check Python syntax
         run: python -m py_compile app/app.py app/desktop_gui.py
       - name: Install PyInstaller
         run: python -m pip install pyinstaller==6.16.0
-      - name: Build standalone desktop application
+      - name: Build standalone Windows app
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name TreasureTracker --add-data "app/dashboard.html;." --add-data "app/overlay.html;." --add-data "app/pirate-theme.png;." --paths app --hidden-import desktop_gui app/app.py
@@ -34,9 +39,43 @@ jobs:
       - name: Create Windows installer
         shell: pwsh
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\TreasureTracker.iss"'
-      - name: Upload installer for private testing
+      - name: Upload installer as build artifact
         uses: actions/upload-artifact@v4
         with:
           name: TreasureTracker-Desktop-Setup
           path: output/TreasureTrackerSetup.exe
           if-no-files-found: error
+      - name: Publish public GitHub pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = 'v1.1.0-rc1'
+          $exe = 'output/TreasureTrackerSetup.exe'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe --clobber --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { throw "Failed to update release asset" }
+          } else {
+            gh release create $tag $exe --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title "Treasure Tracker Desktop v1.1 (pre-release)" --notes "Native Windows Treasure Tracker control panel with global hotkeys, squad chest counting and live stream overlay. Build passed automated checks. Not yet tested manually on Windows. No Fortnite/Epic or TikTok endorsement or anti-cheat guarantee."
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create release" }
+          }
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
