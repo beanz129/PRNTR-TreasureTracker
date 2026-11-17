@@ -42,7 +42,7 @@ def available_profiles():
 
 HOST, PORT = '127.0.0.1', 8765
 LOCK = threading.RLock()
-DEFAULT = {'chests': 0, 'tokens': 0, 'tokens_per_chest': 1, 'chests_per_click': 1, 'last_chest_increment': 0, 'last_treasure_increment': 0, 'hotkey': 'MIDDLE MOUSE', 'enabled': True, 'session_started': time.time(), 'last_opened': None}
+DEFAULT = {'chests': 0, 'tokens': 0, 'tokens_per_chest': 1, 'chests_per_click': 1, 'last_chest_increment': 0, 'last_treasure_increment': 0, 'hotkey': 'MIDDLE MOUSE', 'enabled': True, 'session_started': time.time(), 'last_opened': None, 'last_hotkey_seen': None}
 
 def load_profile(username):
     path = profile_path(username)
@@ -107,6 +107,8 @@ def update(command, value=None):
             state['last_chest_increment'] = amount
             state['last_treasure_increment'] = treasure
             state['last_opened'] = time.time()
+            if value == 'hotkey':
+                state['last_hotkey_seen'] = state['last_opened']
         elif command == 'undo':
             if state['chests'] > 0 and state.get('last_chest_increment', 0) > 0:
                 state['chests'] = max(0, state['chests'] - state['last_chest_increment'])
@@ -166,7 +168,7 @@ def hotkey_loop():
             last_key = key
         down = bool(get_key(vk) & 0x8000)
         if down and not is_down and s.get('enabled', True) and time.monotonic() - last_press > 0.18:
-            update('open')
+            update('open', 'hotkey')
             last_press = time.monotonic()
         is_down = down
         time.sleep(0.018)
