@@ -1,6 +1,8 @@
 name: Build Windows installer
 on:
   workflow_dispatch:
+  push:
+    branches: [treasure-tracker-release]
 permissions:
   contents: read
 jobs:
@@ -12,27 +14,29 @@ jobs:
         with:
           python-version: '3.13'
           architecture: 'x64'
-      - name: Verify complete app assets
+      - name: Verify desktop source
         shell: pwsh
         run: |
-          @('app/app.py','app/dashboard.html','app/overlay.html','app/pirate-theme.png','installer/TreasureTracker.iss') | ForEach-Object {
-            if (-not (Test-Path $_)) { throw "Missing required project file: $_" }
+          @('app/app.py','app/desktop_gui.py','app/dashboard.html','app/overlay.html','app/pirate-theme.png','installer/TreasureTracker.iss') | ForEach-Object {
+            if (-not (Test-Path $_)) { throw "Required file missing: $_" }
           }
+      - name: Check Python source
+        run: python -m py_compile app/app.py app/desktop_gui.py
       - name: Install PyInstaller
         run: python -m pip install pyinstaller==6.16.0
-      - name: Package Windows app
+      - name: Build standalone desktop application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --console --name TreasureTracker --add-data "app/dashboard.html;." --add-data "app/overlay.html;." --add-data "app/pirate-theme.png;." app/app.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name TreasureTracker --add-data "app/dashboard.html;." --add-data "app/overlay.html;." --add-data "app/pirate-theme.png;." --paths app --hidden-import desktop_gui app/app.py
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
-      - name: Build setup executable
+      - name: Create Windows installer
         shell: pwsh
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\TreasureTracker.iss"'
-      - name: Upload installer for testing
+      - name: Upload installer for private testing
         uses: actions/upload-artifact@v4
         with:
-          name: TreasureTrackerSetup
+          name: TreasureTracker-Desktop-Setup
           path: output/TreasureTrackerSetup.exe
           if-no-files-found: error
