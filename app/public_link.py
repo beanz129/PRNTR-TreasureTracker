@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -44,8 +45,41 @@ class PublicLinkService:
 
             def do_GET(self):
                 path = urlsplit(self.path).path
-                if path not in ("/", "/overlay", "/api/state", "/pirate-theme.png"):
+                if path not in ("/", "/overlay", "/api/state", "/api/events", "/pirate-theme.png"):
                     return self.send_error(404, "Not found")
+                if path == "/api/events":
+                    # Event-driven live updates avoid background browser timer throttling.
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                    self.send_header("Cache-Control", "no-cache, no-transform")
+                    self.send_header("X-Accel-Buffering", "no")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    last_payload = None
+                    last_heartbeat = 0.0
+                    try:
+                        while True:
+                            s = snapshot()
+                            public = {
+                                "chests": int(s.get("chests", 0)),
+                                "tokens": int(s.get("tokens", 0)),
+                                "username": str(s.get("username", "default")),
+                            }
+                            payload = json.dumps(public, separators=(",", ":"))
+                            now = time.monotonic()
+                            if payload != last_payload:
+                                self.wfile.write(("data: " + payload + "\\n\\n").encode("utf-8"))
+                                self.wfile.flush()
+                                last_payload = payload
+                                last_heartbeat = now
+                            elif now - last_heartbeat >= 12:
+                                self.wfile.write(b": ping\\n\\n")
+                                self.wfile.flush()
+                                last_heartbeat = now
+                            time.sleep(0.12)
+                    except (BrokenPipeError, ConnectionResetError, OSError):
+                        pass
+                    return
                 try:
                     if path == "/api/state":
                         s = snapshot()
