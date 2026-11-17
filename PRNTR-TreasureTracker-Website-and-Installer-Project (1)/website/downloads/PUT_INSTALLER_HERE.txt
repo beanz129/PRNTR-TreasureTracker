@@ -1,0 +1,1 @@
+After Windows build, copy output/TreasureTrackerSetup.exe here. The public download button activates automatically.

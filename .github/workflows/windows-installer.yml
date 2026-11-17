@@ -1,0 +1,38 @@
+name: Build Windows installer
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - name: Verify complete app assets
+        shell: pwsh
+        run: |
+          @('app/app.py','app/dashboard.html','app/overlay.html','app/pirate-theme.png','installer/TreasureTracker.iss') | ForEach-Object {
+            if (-not (Test-Path $_)) { throw "Missing required project file: $_" }
+          }
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onedir --console --name TreasureTracker --add-data "app/dashboard.html;." --add-data "app/overlay.html;." --add-data "app/pirate-theme.png;." app/app.py
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Build setup executable
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer\TreasureTracker.iss"'
+      - name: Upload installer for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: TreasureTrackerSetup
+          path: output/TreasureTrackerSetup.exe
+          if-no-files-found: error
