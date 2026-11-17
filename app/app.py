@@ -153,48 +153,21 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(json.dumps({'error': str(error)}).encode(), 'application/json', 400)
 
 if __name__ == '__main__':
-    if os.name != 'nt':
-        print('Global hotkeys require Windows. Web controls can still run.')
     try:
         server = ThreadingHTTPServer((HOST, PORT), Handler)
     except OSError as exc:
-        print(f'Cannot start counter on port {PORT}: {exc}')
-        if sys.stdin and sys.stdin.isatty(): input('Press Enter to exit...')
+        # On windowed builds print messages are invisible: show a Windows dialog.
+        if os.name == 'nt':
+            ctypes.windll.user32.MessageBoxW(0, f"Could not start Treasure Tracker on port {PORT}.\\n\\nClose the other tracker first.\\n{exc}", "Treasure Tracker", 0x10)
+        else:
+            print(f"Cannot start Treasure Tracker: {exc}")
         raise SystemExit(1)
     threading.Thread(target=hotkey_loop, daemon=True).start()
-    print('========================================')
-    print('         TREASURE TRACKER')
-    print('========================================')
-    print(f'Dashboard: http://{HOST}:{PORT}/dashboard')
-    print(f'Overlay:   http://{HOST}:{PORT}/overlay')
-    print('Keep this window running during your LIVE.')
-    print('Press Ctrl+C to stop. Your counters are saved.')
-    print('========================================')
-    webbrowser.open(f'http://{HOST}:{PORT}/dashboard')
-    # Dedicated Chromium app window avoids ordinary background-tab throttling.
-    browser_paths = [
-        Path(os.environ.get('PROGRAMFILES(X86)', 'C:/Program Files (x86)')) / 'Microsoft/Edge/Application/msedge.exe',
-        Path(os.environ.get('PROGRAMFILES', 'C:/Program Files')) / 'Microsoft/Edge/Application/msedge.exe',
-        Path(os.environ.get('PROGRAMFILES', 'C:/Program Files')) / 'Google/Chrome/Application/chrome.exe',
-        Path(os.environ.get('PROGRAMFILES(X86)', 'C:/Program Files (x86)')) / 'Google/Chrome/Application/chrome.exe',
-    ]
-    for browser in browser_paths:
-        if browser.is_file():
-            try:
-                subprocess.Popen([
-                    str(browser), '--user-data-dir=' + str(DATA_DIR / 'browser-profile'),
-                    f'--app=http://{HOST}:{PORT}/overlay', '--window-size=650,230',
-                    '--disable-background-timer-throttling',
-                    '--disable-renderer-backgrounding',
-                    '--disable-backgrounding-occluded-windows',
-                    '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,TabFreeze'
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except OSError:
-                pass
-            break
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
     try:
-        server.serve_forever(poll_interval=0.2)
-    except KeyboardInterrupt:
-        print('\nCounter stopped.')
+        from desktop_gui import launch
+        launch(snapshot, update, DATA_DIR, server.shutdown)
     finally:
+        server.shutdown()
         server.server_close()
