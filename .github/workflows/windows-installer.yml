@@ -4,7 +4,7 @@ on:
   push:
     branches: [treasure-tracker-release]
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 concurrency:
@@ -45,21 +45,7 @@ jobs:
           name: TreasureTracker-Desktop-Setup
           path: output/TreasureTrackerSetup.exe
           if-no-files-found: error
-      - name: Publish public GitHub pre-release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $tag = 'v1.1.0-rc1'
-          $exe = 'output/TreasureTrackerSetup.exe'
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $exe --clobber --repo $env:GITHUB_REPOSITORY
-            if ($LASTEXITCODE -ne 0) { throw "Failed to update release asset" }
-          } else {
-            gh release create $tag $exe --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title "Treasure Tracker Desktop v1.1 (pre-release)" --notes "Native Windows Treasure Tracker control panel with global hotkeys, squad chest counting and live stream overlay. Build passed automated checks. Not yet tested manually on Windows. No Fortnite/Epic or TikTok endorsement or anti-cheat guarantee."
-            if ($LASTEXITCODE -ne 0) { throw "Failed to create release" }
-          }
+
   pages:
     needs: build
     runs-on: ubuntu-latest
@@ -72,7 +58,14 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
-      - name: Upload website
+      - name: Include compiled installer in website
+        uses: actions/download-artifact@v4
+        with:
+          name: TreasureTracker-Desktop-Setup
+          path: website/downloads
+      - name: Verify direct installer download
+        run: test -s website/downloads/TreasureTrackerSetup.exe
+      - name: Upload website and installer
         uses: actions/upload-pages-artifact@v3
         with:
           path: website
