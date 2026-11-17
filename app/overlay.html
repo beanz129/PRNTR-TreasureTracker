@@ -58,8 +58,42 @@ body{font-family:'Fredoka',Arial,sans-serif;padding:10px}
   </div>
 </div>
 <script>
-let count=null;async function update(){try{const response=await fetch('/api/state',{cache:'no-store'});if(!response.ok)return;const s=await response.json();if(count!==null&&s.chests>count){const e=document.getElementById('panel');e.classList.remove('pop');void e.offsetWidth;e.classList.add('pop')}count=s.chests;document.getElementById('chests').textContent=s.chests.toLocaleString();document.getElementById('tokens').textContent=s.tokens.toLocaleString();document.getElementById('streamer').textContent='🏴‍☠️ '+(s.username||'default')+'\u2019s chest grind'}catch(e){}}
-update();setInterval(update,250);
+let lastCount=null;
+let lastEventAt=0;
+let stream=null;
+function applyState(s){
+  if(!s || typeof s.chests!=='number') return;
+  if(lastCount!==null && s.chests>lastCount){
+    const el=document.getElementById('panel');
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+  }
+  lastCount=s.chests;
+  document.getElementById('chests').textContent=s.chests.toLocaleString();
+  document.getElementById('tokens').textContent=s.tokens.toLocaleString();
+  document.getElementById('streamer').textContent='🏴‍☠️ '+(s.username||'default')+'\u2019s chest grind';
+}
+async function fallbackRefresh(){
+  try{
+    const response=await fetch('/api/state',{cache:'no-store'});
+    if(response.ok) applyState(await response.json());
+  }catch(_){}
+}
+function startLiveUpdates(){
+  if(!window.EventSource){fallbackRefresh();return;}
+  stream=new EventSource('/api/events');
+  stream.onmessage=(event)=>{
+    try{applyState(JSON.parse(event.data));lastEventAt=Date.now();}catch(_){}
+  };
+  stream.onerror=()=>{fallbackRefresh();};
+}
+startLiveUpdates();
+fallbackRefresh();
+// A slow fallback only when the event stream stalls.
+// EventSource messages normally update the overlay immediately without a JS timer.
+setInterval(()=>{if(Date.now()-lastEventAt>3500)fallbackRefresh();},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)fallbackRefresh();});
 </script>
 </body>
 </html>
