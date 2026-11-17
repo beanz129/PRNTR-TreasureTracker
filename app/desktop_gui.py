@@ -29,8 +29,8 @@ def open_overlay(data_dir):
 def launch(snapshot, update, data_dir, shutdown):
     root=tk.Tk()
     root.title("PRNTR • Treasure Tracker")
-    root.geometry("1180x790")
-    root.minsize(980,720)
+    root.geometry("1200x840")
+    root.minsize(1000,760)
     root.configure(bg=BG)
     try:
         root.tk.call("tk", "scaling", 1.2)
@@ -57,14 +57,39 @@ def launch(snapshot, update, data_dir, shutdown):
     side.grid(row=0,column=0,sticky="nsw",padx=(0,18))
     side.grid_propagate(False)
     label(side,"PRNTR / STREAM TOOLS",10,MINT,True).pack(anchor="w")
-    label(side,"TREASURE\\nTRACKER",28,GOLD,True).pack(anchor="w",pady=(8,7))
-    label(side,"PIRATE EDITION",10,MINT,True).pack(anchor="w")
+    label(side,"TREASURE\\nTRACKER",27,GOLD,True).pack(anchor="w",pady=(8,7))
+    label(side,"LOCAL PROFILES  /  PIRATE EDITION",9,MINT,True).pack(anchor="w")
     tk.Label(side,text="Stream-ready chest tracking with hotkeys, team presets and a dedicated overlay.",
              bg=side.cget("bg"),fg=MUTED,font=("Segoe UI",10),wraplength=214,justify="left").pack(anchor="w",pady=(12,20))
     status=tk.Frame(side,bg="#122630",padx=15,pady=14)
     status.pack(fill="x",pady=(0,14))
     label(status,"● LIVE STATUS",10,MINT,True).pack(anchor="w")
     label(status,"Ready to count chests",12,WHITE,True).pack(anchor="w",pady=(7,0))
+    profile_box=panel(side);profile_box.pack(fill="x",pady=(0,14))
+    label(profile_box,"YOUR TRACKER",11,WHITE,True).pack(anchor="w",pady=(0,6))
+    label(profile_box,"Choose a profile or create a new one.",9,MUTED).pack(anchor="w",pady=(0,8))
+    profile_name=tk.StringVar(value="default")
+    profile_choices=ttk.Combobox(profile_box,textvariable=profile_name,state="readonly")
+    profile_choices.pack(fill="x",pady=(0,9))
+    profile_new=tk.StringVar()
+    name_entry=tk.Entry(profile_box,textvariable=profile_new,bg=BG,fg=WHITE,
+                        insertbackground=GOLD,highlightbackground="#39545d",highlightthickness=1,
+                        bd=0,font=("Segoe UI",11))
+    name_entry.pack(fill="x",ipady=7,pady=(0,8))
+    label(profile_box,"New username (letters, numbers, _ or -)",8,MUTED).pack(anchor="w",pady=(0,7))
+    def switch_profile():
+        act("profile_select",profile_name.get())
+    def create_profile():
+        username=profile_new.get().strip()
+        if username:
+            try:
+                update("profile_create",username)
+                profile_new.set("")
+            except (ValueError,TypeError) as error:
+                messagebox.showerror("Treasure Tracker",str(error),parent=root)
+    button(profile_box,"Switch tracker",switch_profile).pack(fill="x",pady=(0,6))
+    button(profile_box,"Create my tracker",create_profile,True).pack(fill="x")
+    profile_choices.bind("<<ComboboxSelected>>",lambda event: switch_profile())
     quick=panel(side);quick.pack(fill="x",pady=(0,14))
     label(quick,"QUICK ACTIONS",11,WHITE,True).pack(anchor="w",pady=(0,10))
     button(quick,"+ ADD CHEST",lambda:act("open"),True).pack(fill="x",pady=(0,8))
@@ -132,6 +157,11 @@ def launch(snapshot, update, data_dir, shutdown):
         if not root.winfo_exists():
             return
         s=snapshot()
+        choices=s.get("profiles",["default"])
+        if tuple(profile_choices["values"])!=tuple(choices):
+            profile_choices["values"]=choices
+        if root.focus_get() not in (profile_choices,name_entry):
+            profile_name.set(s.get("username","default"))
         counts["chests"].set(f'{s["chests"]:,}')
         counts["tokens"].set(f'{s["tokens"]:,}')
         counts["rate"].set(f'{int(s["chests"]*3600/max(1,time.time()-s["session_started"])):,}')
