@@ -7,6 +7,7 @@ import webbrowser
 import sys
 import subprocess
 import logging
+import re
 from ctypes import wintypes
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,33 +17,88 @@ from urllib.parse import urlparse
 BASE = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 DATA_DIR = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'PRNTR' / 'TreasureTracker'
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-STATE_PATH = DATA_DIR / 'counter-data.json'
-# Existing users can import their previous totals by copying counter-data.json here.
+LEGACY_STATE_PATH = DATA_DIR / 'counter-data.json'
+PROFILE_DIR = DATA_DIR / 'profiles'
+PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+ACTIVE_PROFILE_PATH = DATA_DIR / 'active-profile.json'
+# Usernames are LOCAL profiles, not cloud accounts.
+def normalize_username(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,24}', value):
+        raise ValueError('Username must be 1-24 characters (letters, numbers, _ or -)')
+    return value.lower()
+
+def profile_path(username):
+    return PROFILE_DIR / (normalize_username(username) + '.json')
+
+def get_current_username():
+    try:
+        obj = json.loads(ACTIVE_PROFILE_PATH.read_text(encoding='utf-8'))
+        return normalize_username(obj.get('username', 'default'))
+    except (OSError, ValueError, TypeError):
+        return 'default'
+
+def available_profiles():
+    return sorted(p.stem for p in PROFILE_DIR.glob('*.json') if re.fullmatch(r'[a-z0-9_-]{1,24}', p.stem))
 
 HOST, PORT = '127.0.0.1', 8765
 LOCK = threading.RLock()
 DEFAULT = {'chests': 0, 'tokens': 0, 'tokens_per_chest': 1, 'chests_per_click': 1, 'last_chest_increment': 0, 'last_treasure_increment': 0, 'hotkey': 'MIDDLE MOUSE', 'enabled': True, 'session_started': time.time(), 'last_opened': None}
 
-def load_state():
+def load_profile(username):
+    path = profile_path(username)
     try:
-        content = json.loads(STATE_PATH.read_text(encoding='utf-8'))
-        return {**DEFAULT, **{k:v for k,v in content.items() if k in DEFAULT}}
+        content = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError, TypeError):
-        return DEFAULT.copy()
+        # Preserve existing users' counts by migrating their original state to Default.
+        if username == 'default' and LEGACY_STATE_PATH.is_file() and not path.exists():
+            try:
+                content = json.loads(LEGACY_STATE_PATH.read_text(encoding='utf-8'))
+            except (OSError, ValueError, TypeError):
+                content = {}
+        else:
+            content = {}
+    cleaned = {k: v for k, v in content.items() if k in DEFAULT}
+    return {**DEFAULT, **cleaned}
 
-state = load_state()
+current_profile = get_current_username()
+state = load_profile(current_profile)
 
 def save_state():
-    tmp = STATE_PATH.with_suffix('.tmp')
+    path = profile_path(current_profile)
+    tmp = path.with_suffix('.tmp')
     tmp.write_text(json.dumps(state, indent=2), encoding='utf-8')
-    tmp.replace(STATE_PATH)
+    tmp.replace(path)
+
+def save_active_profile():
+    tmp = ACTIVE_PROFILE_PATH.with_suffix('.tmp')
+    tmp.write_text(json.dumps({'username': current_profile}), encoding='utf-8')
+    tmp.replace(ACTIVE_PROFILE_PATH)
+
+# Create the initial default profile on first launch, migrating existing totals.
+save_state()
+save_active_profile()
 
 def snapshot():
     with LOCK:
-        return state.copy()
+        return {**state, 'username': current_profile, 'profiles': available_profiles()}
 
 def update(command, value=None):
+    global current_profile, state
     with LOCK:
+        if command in ('profile_create', 'profile_select'):
+            username = normalize_username(value)
+            path = profile_path(username)
+            if command == 'profile_create' and path.exists():
+                raise ValueError('That profile already exists on this PC')
+            if command == 'profile_select' and not path.exists():
+                raise ValueError('Profile not found on this PC')
+            if command == 'profile_create':
+                fresh = {**DEFAULT, 'session_started': time.time()}
+                path.write_text(json.dumps(fresh, indent=2), encoding='utf-8')
+            current_profile = username
+            state = load_profile(username)
+            save_active_profile()
+            return snapshot()
         if command == 'open':
             amount = max(1, min(1000, int(state.get('chests_per_click', 1))))
             treasure = amount * state['tokens_per_chest']
@@ -66,7 +122,8 @@ def update(command, value=None):
         elif command == 'per_chest':
             state['tokens_per_chest'] = max(0, min(100000, int(value)))
         elif command == 'hotkey':
-            if value not in KEY_MAP: raise ValueError('Invalid hotkey')
+            if value not in KEY_MAP:
+                raise ValueError('Invalid hotkey')
             state['hotkey'] = value
         elif command == 'enabled':
             state['enabled'] = bool(value)
@@ -80,7 +137,7 @@ def update(command, value=None):
         else:
             raise ValueError('Unknown action')
         save_state()
-        return state.copy()
+        return snapshot()
 
 # Windows VK codes. Polling works globally, including while Minecraft is focused.
 KEY_MAP = {
