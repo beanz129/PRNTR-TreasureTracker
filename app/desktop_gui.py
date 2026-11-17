@@ -98,8 +98,12 @@ def launch(snapshot, update, data_dir, shutdown):
     presets=panel(side);presets.pack(fill="x")
     label(presets,"TEAM PRESETS",11,WHITE,True).pack(anchor="w",pady=(0,9))
     label(presets,"Change chests per click instantly.",9,MUTED).pack(anchor="w",pady=(0,9))
-    for name,amount in (("SOLO",1),("DUO",2),("TRIO",3),("SQUAD",4)):
-        button(presets,name+"  •  "+str(amount),lambda n=amount:act("chests_per_click",n)).pack(fill="x",pady=(0,5))
+    preset_grid=tk.Frame(presets,bg=PANEL)
+    preset_grid.pack(fill="x")
+    for i,(name,amount) in enumerate((("SOLO",1),("DUO",2),("TRIO",3),("SQUAD",4))):
+        button(preset_grid,name+" "+str(amount),lambda n=amount:act("chests_per_click",n)).grid(row=i//2,column=i%2,sticky="ew",padx=(0,4) if i%2==0 else 0,pady=(0,4))
+    preset_grid.grid_columnconfigure(0,weight=1)
+    preset_grid.grid_columnconfigure(1,weight=1)
     body=tk.Frame(outer,bg=BG)
     body.grid(row=0,column=1,sticky="nsew")
     header=panel(body)
