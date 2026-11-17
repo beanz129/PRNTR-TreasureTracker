@@ -41,7 +41,7 @@ body{font-family:'Fredoka',Arial,sans-serif;padding:10px}
   <div class="inner">
     <div class="badge">💎</div>
     <div class="content">
-      <div class="kicker">🏴‍☠️ Live Chest Grind</div>
+      <div class="kicker" id="streamer">🏴‍☠️ Live Chest Grind</div>
       <div class="title">Treasure Tracker</div>
       <div class="row">
         <div class="group">
@@ -58,7 +58,7 @@ body{font-family:'Fredoka',Arial,sans-serif;padding:10px}
   </div>
 </div>
 <script>
-let count=null;async function update(){try{const response=await fetch('/api/state',{cache:'no-store'});if(!response.ok)return;const s=await response.json();if(count!==null&&s.chests>count){const e=document.getElementById('panel');e.classList.remove('pop');void e.offsetWidth;e.classList.add('pop')}count=s.chests;document.getElementById('chests').textContent=s.chests.toLocaleString();document.getElementById('tokens').textContent=s.tokens.toLocaleString()}catch(e){}}
+let count=null;async function update(){try{const response=await fetch('/api/state',{cache:'no-store'});if(!response.ok)return;const s=await response.json();if(count!==null&&s.chests>count){const e=document.getElementById('panel');e.classList.remove('pop');void e.offsetWidth;e.classList.add('pop')}count=s.chests;document.getElementById('chests').textContent=s.chests.toLocaleString();document.getElementById('tokens').textContent=s.tokens.toLocaleString();document.getElementById('streamer').textContent='🏴‍☠️ '+(s.username||'default')+'\u2019s chest grind'}catch(e){}}
 update();setInterval(update,250);
 </script>
 </body>
