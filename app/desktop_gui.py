@@ -81,6 +81,9 @@ def launch(snapshot, update, data_dir, shutdown):
     button(quick,"+ ADD CHEST",lambda:act("open"),True).pack(fill="x",pady=(0,8))
     button(quick,"Undo last click",lambda:act("undo")).pack(fill="x",pady=(0,8))
     button(quick,"Create LIVE link",live_link.start,True).pack(fill="x")
+    hotkey_status=tk.StringVar(value="Last game hotkey: no presses detected")
+    tk.Label(quick,textvariable=hotkey_status,bg=PANEL,fg=MINT,font=("Segoe UI",9),
+             wraplength=185,justify="left").pack(anchor="w",pady=(10,0))
     presets=panel(side);presets.pack(fill="x")
     label(presets,"TEAM PRESETS",11,WHITE,True).pack(anchor="w",pady=(0,9))
     label(presets,"Change chests per click instantly.",9,MUTED).pack(anchor="w",pady=(0,9))
@@ -162,6 +165,12 @@ def launch(snapshot, update, data_dir, shutdown):
         if not root.winfo_exists():
             return
         s=snapshot()
+        last_press=s.get("last_hotkey_seen")
+        if last_press:
+            elapsed=max(0,int(time.time()-float(last_press)))
+            hotkey_status.set("Last game hotkey: "+("just now" if elapsed<2 else str(elapsed)+"s ago"))
+        else:
+            hotkey_status.set("Last game hotkey: no presses detected")
         connection=live_link.get_state()
         link_status.set(connection["error"] or connection["status"])
         address=connection["url"] or "Press Create LIVE link"
