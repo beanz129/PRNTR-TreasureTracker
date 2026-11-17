@@ -1,15 +1,13 @@
-// Public downloadable installer hosted on GitHub Releases.
-// No GitHub account is required for downloads from public releases.
-const installer = 'https://github.com/beanz129/PRNTR-TreasureTracker/releases/download/v1.1.0-rc1/TreasureTrackerSetup.exe';
-const button = document.getElementById('downloadButton');
-const heroButton = document.getElementById('downloadMain');
+// Installer is delivered directly from the website's /downloads/ folder.
+const installer = './downloads/TreasureTrackerSetup.exe';
+const btn = document.getElementById('downloadButton');
+const main = document.getElementById('downloadMain');
 const status = document.getElementById('downloadStatus');
-
-if (button) {
-  button.href = installer;
-  button.removeAttribute('aria-disabled');
-  button.removeAttribute('download');
-  button.textContent = '⚓ Download Desktop App for Windows ↗';
+for (const element of [btn, main]) {
+  if (!element) continue;
+  element.href = installer;
+  element.setAttribute('download', 'TreasureTrackerSetup.exe');
+  element.removeAttribute('aria-disabled');
 }
-if (heroButton) heroButton.href = installer;
-if (status) status.textContent = 'Desktop v1.1 pre-release • Windows 10/11 x64 • No Python required • Not yet tested on Windows';
+if (btn) btn.textContent = '⚓ Download Desktop App for Windows';
+if (status) status.textContent = 'Direct website download • Desktop v1.1 pre-release • Windows 10/11 (64-bit) • No Python required • Not yet manually tested';
