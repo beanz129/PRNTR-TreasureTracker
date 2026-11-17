@@ -10,23 +10,9 @@ from tkinter import ttk, messagebox
 BG="#081018"; PANEL="#152935"; GOLD="#ffc975"; MINT="#72edd0"; WHITE="#f4fbfb"; MUTED="#91acb8"
 URL="http://127.0.0.1:8765/overlay"
 
-def open_overlay(data_dir):
-    roots=[os.environ.get("PROGRAMFILES(X86)",r"C:\Program Files (x86)"),os.environ.get("PROGRAMFILES",r"C:\Program Files")]
-    browser_paths=[Path(r)/s for r in roots for s in ("Microsoft/Edge/Application/msedge.exe","Google/Chrome/Application/chrome.exe")]
-    for browser in browser_paths:
-        if browser.is_file():
-            try:
-                subprocess.Popen([str(browser),"--user-data-dir="+str(data_dir/"browser-profile"),
-                    "--app="+URL,"--window-size=680,230","--disable-background-timer-throttling",
-                    "--disable-renderer-backgrounding","--disable-backgrounding-occluded-windows",
-                    "--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,TabFreeze"],
-                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-                return
-            except OSError:
-                pass
-    webbrowser.open(URL)
-
 def launch(snapshot, update, data_dir, shutdown):
+    from public_link import PublicLinkService
+    live_link = PublicLinkService(snapshot)
     root=tk.Tk()
     root.title("PRNTR • Treasure Tracker")
     root.geometry("1200x840")
@@ -59,7 +45,7 @@ def launch(snapshot, update, data_dir, shutdown):
     label(side,"PRNTR / STREAM TOOLS",10,MINT,True).pack(anchor="w")
     label(side,"TREASURE\\nTRACKER",27,GOLD,True).pack(anchor="w",pady=(8,7))
     label(side,"LOCAL PROFILES  /  PIRATE EDITION",9,MINT,True).pack(anchor="w")
-    tk.Label(side,text="Stream-ready chest tracking with hotkeys, team presets and a dedicated overlay.",
+    tk.Label(side,text="Stream-ready chest tracking with hotkeys, team presets and an HTTPS LIVE link.",
              bg=side.cget("bg"),fg=MUTED,font=("Segoe UI",10),wraplength=214,justify="left").pack(anchor="w",pady=(12,20))
     status=tk.Frame(side,bg="#122630",padx=15,pady=14)
     status.pack(fill="x",pady=(0,14))
@@ -94,7 +80,7 @@ def launch(snapshot, update, data_dir, shutdown):
     label(quick,"QUICK ACTIONS",11,WHITE,True).pack(anchor="w",pady=(0,10))
     button(quick,"+ ADD CHEST",lambda:act("open"),True).pack(fill="x",pady=(0,8))
     button(quick,"Undo last click",lambda:act("undo")).pack(fill="x",pady=(0,8))
-    button(quick,"Open overlay",lambda:open_overlay(data_dir)).pack(fill="x")
+    button(quick,"Create LIVE link",live_link.start,True).pack(fill="x")
     presets=panel(side);presets.pack(fill="x")
     label(presets,"TEAM PRESETS",11,WHITE,True).pack(anchor="w",pady=(0,9))
     label(presets,"Change chests per click instantly.",9,MUTED).pack(anchor="w",pady=(0,9))
@@ -110,7 +96,7 @@ def launch(snapshot, update, data_dir, shutdown):
     header.pack(fill="x",pady=(0,15))
     label(header,"PIRATE EDITION  /  DESKTOP",10,MINT,True).pack(anchor="w")
     label(header,"Track every chest like it matters.",23,WHITE,True).pack(anchor="w",pady=(5,4))
-    label(header,"Instant counting • Squad presets • Live TikTok / OBS overlay",10,MUTED).pack(anchor="w")
+    label(header,"Instant counting • Squad presets • Direct TikTok LIVE Studio HTTPS link",10,MUTED).pack(anchor="w")
     statistics=tk.Frame(body,bg=BG); statistics.pack(fill="x")
     counts={}
     for i,(key,name) in enumerate((("chests","CHESTS OPENED"),("tokens","TREASURE FOUND"),("rate","CHESTS / HOUR"))):
@@ -149,18 +135,38 @@ def launch(snapshot, update, data_dir, shutdown):
     tk.Checkbutton(settings,text="Global hotkey enabled",variable=enabled,command=lambda:act("enabled",enabled.get()),
         bg=PANEL,fg=WHITE,activebackground=PANEL,activeforeground=WHITE,selectcolor=BG).grid(row=4,column=0,columnspan=2,sticky="w",pady=(7,0))
     streaming=panel(body);streaming.pack(fill="x",pady=(12,0))
-    label(streaming,"STREAM OVERLAY  /  TIKTOK + OBS",13,WHITE,True).pack(anchor="w")
-    label(streaming,"Window Capture: capture the separate overlay window and leave it unminimised.",9,MUTED).pack(anchor="w",pady=(3,8))
+    label(streaming,"TIKTOK LIVE STUDIO  /  HTTPS LINK",13,WHITE,True).pack(anchor="w")
+    label(streaming,"Create a public HTTPS link, copy it, then paste it into TikTok LIVE Studio's Link source.",9,MUTED).pack(anchor="w",pady=(3,8))
+    link_status=tk.StringVar(value="Not connected")
+    public_url=tk.StringVar(value="Press Create LIVE link")
+    label(streaming,"Connection status",9,MUTED).pack(anchor="w",pady=(3,2))
+    tk.Label(streaming,textvariable=link_status,fg=MINT,bg=PANEL,font=("Segoe UI",10,"bold")).pack(anchor="w",pady=(0,7))
+    link_entry=tk.Entry(streaming,textvariable=public_url,state="readonly",readonlybackground=BG,fg=WHITE,
+                        highlightbackground="#39545d",highlightthickness=1,bd=0,font=("Segoe UI",10))
+    link_entry.pack(fill="x",ipady=9,pady=(0,10))
+    def copy_public_url():
+        address=live_link.get_state()["url"]
+        if address:
+            root.clipboard_clear()
+            root.clipboard_append(address)
+            link_status.set("HTTPS link copied")
+        else:
+            messagebox.showinfo("Treasure Tracker","Create a LIVE link first, then copy it.",parent=root)
+
     overlay_actions=tk.Frame(streaming,bg=PANEL);overlay_actions.pack(fill="x")
-    button(overlay_actions,"Open overlay",lambda:open_overlay(data_dir),True).pack(side="left",padx=(0,8))
-    def copy_url():
-        root.clipboard_clear();root.clipboard_append(URL)
-    button(overlay_actions,"Copy local URL",copy_url).pack(side="left",padx=(0,8))
+    button(overlay_actions,"Create LIVE link",live_link.start,True).pack(side="left",padx=(0,8))
+    button(overlay_actions,"Copy HTTPS link",copy_public_url).pack(side="left",padx=(0,8))
+    button(overlay_actions,"Disconnect",live_link.stop).pack(side="left",padx=(0,8))
     button(overlay_actions,"Reset session",lambda:act("reset") if messagebox.askyesno("Reset session","Reset both totals to zero?",parent=root) else None).pack(side="right")
     def refresh():
         if not root.winfo_exists():
             return
         s=snapshot()
+        connection=live_link.get_state()
+        link_status.set(connection["error"] or connection["status"])
+        address=connection["url"] or "Press Create LIVE link"
+        if public_url.get()!=address:
+            public_url.set(address)
         choices=s.get("profiles",["default"])
         if tuple(profile_choices["values"])!=tuple(choices):
             profile_choices["values"]=choices
@@ -175,9 +181,10 @@ def launch(snapshot, update, data_dir, shutdown):
             if root.focus_get() != entry: var.set(str(s[state_key]))
         root.after(250,refresh)
     def close():
+        live_link.stop()
         root.destroy()
     root.protocol("WM_DELETE_WINDOW",close)
     try:
-        refresh(); root.after(600,lambda:open_overlay(data_dir));root.mainloop()
+        refresh(); root.mainloop()
     finally:
         shutdown()
